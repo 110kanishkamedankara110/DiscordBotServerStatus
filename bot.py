@@ -1,6 +1,6 @@
 from contextlib import nullcontext
 from datetime import datetime
-
+import asyncio
 import discord
 from discord.ext import commands, tasks
 import paramiko
@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import os
 import platform
 import requests
-
+from discord import FFmpegPCMAudio
 
 # Replace with your bot token and channel ID
 load_dotenv()
@@ -19,7 +19,7 @@ CHANNEL_ID_LOGINS=int(os.getenv("CHANNEL_ID_LOGIN"))
 VPS_IP = os.getenv("VPS_IP")  # Replace with your server's IP
 SSH_USERNAME = os.getenv("SSH_USERNAME")  # Replace with your VPS SSH username
 SSH_PASSWORD = os.getenv("SSH_PASSWORD")  # Or use SSH private key
-
+VOICE_CHANNEL_ID = int(os.getenv("VOICE_CHANNEL_ID"))
 # Create bot instance
 intents = discord.Intents.default()
 intents.message_content = True
@@ -104,15 +104,16 @@ async def checkstatus():
             embed.add_field(name="✅ Your VPS is online.",value="")
         else:
             embed.add_field(name="⚠️ **ALERT:** Your VPS appears to be offline! ⚠️", value="")
-
+            await play_sound()
         embed.set_footer(text="VPS Monitoring Bot")
 
-        if prev_stat_message is not None:
-            await prev_stat_message.edit(embed=embed)
-        else:
-            prev_stat_message=await channel.send(embed=embed)
-
-    # Check if the server is online (ping)
+        try:
+            if prev_stat_message is not None:
+                await prev_stat_message.edit(embed=embed)
+            else:
+                prev_stat_message=await channel.send(embed=embed)
+        except discord.errors.NotFound :
+            prev_stat_message = await channel.send(embed=embed)
 
 
 # Periodic monitoring task
@@ -199,6 +200,14 @@ async def monitor_logins():
             )
             embed.add_field(name="🔒 New Login", value="**Login Alert:** "+event, inline=False)
             await channel.send(embed=embed)
+
+async def play_sound():
+    channel = bot.get_channel(VOICE_CHANNEL_ID)
+    voice = await channel.connect()
+    voice.play(discord.FFmpegPCMAudio("alert.mp3"))
+    while voice.is_playing():
+        await asyncio.sleep(1)
+    await voice.disconnect()
 
 @bot.event
 async def on_ready():
